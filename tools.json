@@ -1,20 +1,20 @@
 {
-      "tools": [
-          {
-              "id": "calculator",
-              "name": "比价计算器",
-              "version": "1.0.0",
-              "description": "比价计算器",
-              "author": "ToolBox",
-              "path": "cal/cal.zip"
-          },
-          {
-              "id": "calculator_html",
-              "name": "比价计算器_html",
-              "version": "1.0.0",
-              "description": "比价计算器",
-              "author": "ToolBox",
-              "path": "cal_test/index.html"
-          }
-      ]
-  }
+    "tools": [
+        {
+            "id": "calculator",
+            "name": "比价计算器",
+            "version": "1.0.0",
+            "description": "比价计算器",
+            "author": "ToolBox",
+            "path": "cal/cal.zip"
+        },
+        {
+            "id": "calculator_html",
+            "name": "比价计算器_html",
+            "version": "1.0.0",
+            "description": "比价计算器",
+            "author": "ToolBox",
+            "path": "cal_test/index.html"
+        }
+    ]
+}
