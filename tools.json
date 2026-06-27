@@ -7,6 +7,14 @@
             "description": "比价计算器",
             "author": "ToolBox",
             "path": "cal/cal.zip"
+        },
+        {
+            "id": "calculator123",
+            "name": "比价计算器123",
+            "version": "1.0.0",
+            "description": "比价计算器",
+            "author": "ToolBox",
+            "path": "cal123/cal123.zip"
         }
     ]
 }
