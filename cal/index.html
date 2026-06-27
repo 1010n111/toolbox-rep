@@ -197,13 +197,13 @@ function groupAndMark(products) {
   const groups = {};
   products.forEach(p => {
     const dim = UNITS[p.unit].dim;
-    (groups[dim] = groups[dim] || { items: [], minIndex: 0 }).items.push(p);
+    (groups[dim] = groups[dim] || { items: [], minIndex: 0, minPrice: 0 }).items.push(p);
   });
   Object.values(groups).forEach(g => {
     let min = Infinity;
     g.items.forEach((p, i) => {
       const up = unitPrice(p);
-      if (up < min) { min = up; g.minIndex = i; }
+      if (up < min) { min = up; g.minIndex = i; g.minPrice = up; }
     });
   });
   return groups;
@@ -289,11 +289,13 @@ function render() {
       const best = i === g.minIndex;
       const div = document.createElement('div');
       div.className = 'item' + (best ? ' best' : '');
+      const diff = unitPrice(p) - g.minPrice;
+      const diffPct = best ? 0 : ((diff / g.minPrice) * 100).toFixed(1);
       div.innerHTML =
         '<div class="item-info"><span class="item-name">' + (p.name || '(未命名)') + '</span>' +
         ' — ' + p.price + '元/' + p.qty + p.unit +
         '<br><span class="up">单价: ' + unitPrice(p).toFixed(4) + ' 元/' + (dim === 'count' ? '个' : (dim === 'weight' ? 'g' : 'ml')) + '</span>' +
-        (best ? '<span class="badge">🏆 最便宜</span>' : '') + '</div>' +
+        (best ? '<span class="badge">🏆 最便宜</span>' : '<span style="color:#ef4444;font-size:12px;margin-left:8px">+' + diff.toFixed(4) + ' (+' + diffPct + '%)</span>') + '</div>' +
         '<button class="danger" onclick="removeProduct(' + gi + ')">删除</button>';
       card.appendChild(div);
     });
