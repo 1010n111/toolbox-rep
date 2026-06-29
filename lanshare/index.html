@@ -139,15 +139,26 @@ class ConnectionManager {
   _setupDataChannel(channel) {
     this.dataChannel = channel;
     channel.onopen = () => {
+      console.log('DataChannel opened!');
       this.status = 'connected';
       if (this.onStatusChange) this.onStatusChange('connected');
     };
     channel.onmessage = (e) => {
-      if (this.onMessage) this.onMessage(JSON.parse(e.data));
+      console.log('Received raw message:', e.data);
+      try {
+        const msg = JSON.parse(e.data);
+        if (this.onMessage) this.onMessage(msg);
+      } catch (err) {
+        console.error('Failed to parse message:', err);
+      }
     };
     channel.onclose = () => {
+      console.log('DataChannel closed');
       this.status = 'disconnected';
       if (this.onStatusChange) this.onStatusChange('disconnected');
+    };
+    channel.onerror = (err) => {
+      console.error('DataChannel error:', err);
     };
   }
 
@@ -173,6 +184,11 @@ class ConnectionManager {
   async acceptOffer(offerStr) {
     const offer = JSON.parse(offerStr);
     this._createPeerConnection();
+    // 必须在 stable 状态设置 remote offer
+    if (this.pc.signalingState !== 'stable') {
+      console.warn('Invalid state for acceptOffer:', this.pc.signalingState);
+      throw new Error('连接状态不正确，请刷新重试');
+    }
     await this.pc.setRemoteDescription(new RTCSessionDescription(offer.sdp));
 
     const answer = await this.pc.createAnswer();
@@ -193,6 +209,11 @@ class ConnectionManager {
   // 接收 Answer 完成连接
   async acceptAnswer(answerStr) {
     const answer = JSON.parse(answerStr);
+    // 检查是否有本地 offer（必须在 have-local-offer 状态）
+    if (this.pc.signalingState !== 'have-local-offer') {
+      console.warn('Invalid state for acceptAnswer:', this.pc.signalingState);
+      throw new Error('连接状态不正确，请重新创建连接');
+    }
     await this.pc.setRemoteDescription(new RTCSessionDescription(answer.sdp));
     answer.candidates.forEach(c => this.pc.addIceCandidate(new RTCIceCandidate(c)));
   }
@@ -407,32 +428,53 @@ function setStatusText(text, color) {
 }
 
 document.getElementById('btnCreate').onclick = async () => {
+  if (connMgr.status !== 'disconnected' && connMgr.status !== 'failed') {
+    if (!confirm('已有连接正在进行中，是否重置并重新创建？')) return;
+    connMgr.close();
+    connMgr = new ConnectionManager();
+    setupConnectionHandlers();
+  }
   setStatusText('生成连接码中...', '#f59e0b');
-  const offer = await connMgr.createOffer();
-
-  const connUi = document.getElementById('connectionUi');
-  connUi.innerHTML = `
-    <div style="margin:12px 0;">
-      <p style="font-size:13px; color:#64748b; margin-bottom:8px;">将此连接码复制给对方：</p>
-      <textarea id="offerText" style="width:100%; height:80px; padding:10px; border:2px solid #e2e8f0; border-radius:8px; font-size:12px; resize:none;" readonly>${offer}</textarea>
-      <button class="secondary" style="width:100%; margin-top:8px;" onclick="navigator.clipboard.writeText(document.getElementById('offerText').value); setStatusText('已复制', '#10b981');">复制连接码</button>
-    </div>
-    <div style="margin:12px 0;">
-      <p style="font-size:13px; color:#64748b; margin-bottom:8px;">粘贴对方的应答码：</p>
-      <textarea id="answerInput" placeholder="粘贴应答码..." style="width:100%; height:60px; padding:10px; border:2px solid #e2e8f0; border-radius:8px; font-size:12px; resize:none;"></textarea>
-      <button id="btnConfirmAnswer" style="width:100%; margin-top:8px;">确认连接</button>
-    </div>
-  `;
+  try {
+    const offer = await connMgr.createOffer();
+    const connUi = document.getElementById('connectionUi');
+    connUi.innerHTML = `
+      <div style="margin:12px 0;">
+        <p style="font-size:13px; color:#64748b; margin-bottom:8px;">将此连接码复制给对方：</p>
+        <textarea id="offerText" style="width:100%; height:80px; padding:10px; border:2px solid #e2e8f0; border-radius:8px; font-size:12px; resize:none;" readonly>${offer}</textarea>
+        <button class="secondary" style="width:100%; margin-top:8px;" onclick="navigator.clipboard.writeText(document.getElementById('offerText').value); setStatusText('已复制', '#10b981');">复制连接码</button>
+      </div>
+      <div style="margin:12px 0;">
+        <p style="font-size:13px; color:#64748b; margin-bottom:8px;">粘贴对方的应答码：</p>
+        <textarea id="answerInput" placeholder="粘贴应答码..." style="width:100%; height:60px; padding:10px; border:2px solid #e2e8f0; border-radius:8px; font-size:12px; resize:none;"></textarea>
+        <button id="btnConfirmAnswer" style="width:100%; margin-top:8px;">确认连接</button>
+      </div>
+    `;
 
   document.getElementById('btnConfirmAnswer').onclick = async () => {
     const answer = document.getElementById('answerInput').value.trim();
     if (!answer) return;
     setStatusText('连接中...', '#f59e0b');
-    await connMgr.acceptAnswer(answer);
+    try {
+      await connMgr.acceptAnswer(answer);
+    } catch (e) {
+      setStatusText('连接失败: ' + e.message, '#ef4444');
+      console.error(e);
+    }
   };
+  } catch (e) {
+    setStatusText('生成连接码失败: ' + e.message, '#ef4444');
+    console.error(e);
+  }
 };
 
 document.getElementById('btnJoin').onclick = () => {
+  if (connMgr.status !== 'disconnected' && connMgr.status !== 'failed') {
+    if (!confirm('已有连接正在进行中，是否重置并重新加入？')) return;
+    connMgr.close();
+    connMgr = new ConnectionManager();
+    setupConnectionHandlers();
+  }
   const connUi = document.getElementById('connectionUi');
   connUi.innerHTML = `
     <div style="margin:12px 0;">
@@ -446,32 +488,45 @@ document.getElementById('btnJoin').onclick = () => {
     const offer = document.getElementById('offerInput').value.trim();
     if (!offer) return;
     setStatusText('生成应答中...', '#f59e0b');
-    const answer = await connMgr.acceptOffer(offer);
-
-    connUi.innerHTML += `
-      <div style="margin:12px 0;">
+    try {
+      const answer = await connMgr.acceptOffer(offer);
+      // 使用 insertAdjacentHTML 而不是 += ，避免重建 DOM 导致输入框内容丢失
+      const answerBox = document.createElement('div');
+      answerBox.style.margin = '12px 0';
+      answerBox.innerHTML = `
         <p style="font-size:13px; color:#64748b; margin-bottom:8px;">将此应答码复制给对方：</p>
         <textarea id="answerText" style="width:100%; height:80px; padding:10px; border:2px solid #e2e8f0; border-radius:8px; font-size:12px; resize:none;" readonly>${answer}</textarea>
         <button class="secondary" style="width:100%; margin-top:8px;" onclick="navigator.clipboard.writeText(document.getElementById('answerText').value);">复制应答码</button>
-      </div>
-    `;
+      `;
+      connUi.appendChild(answerBox);
+    } catch (e) {
+      setStatusText('生成应答失败: ' + e.message, '#ef4444');
+      console.error(e);
+    }
   };
 };
 
-connMgr.onStatusChange = (status) => {
-  if (status === 'connected') {
-    setStatusText('已连接 ✓', '#10b981');
-    msgEngine = new MessageEngine(connMgr, deviceInfo);
-    setupMessageHandlers();
-  } else if (status === 'disconnected' || status === 'failed') {
-    setStatusText('连接失败', '#ef4444');
-  }
-};
+function setupConnectionHandlers() {
+  connMgr.onStatusChange = (status) => {
+    if (status === 'connected') {
+      setStatusText('已连接 ✓', '#10b981');
+      msgEngine = new MessageEngine(connMgr, deviceInfo);
+      setupMessageHandlers();
+    } else if (status === 'disconnected' || status === 'failed') {
+      setStatusText('连接失败', '#ef4444');
+    }
+  };
+}
+setupConnectionHandlers();
 
 function setupMessageHandlers() {
   document.getElementById('messagesPanel').style.display = 'block';
 
+  // 关键：将 ConnectionManager 的消息路由到 MessageEngine 处理
+  connMgr.onMessage = (msg) => msgEngine.handleMessage(msg);
+
   msgEngine.onMessage = (msg) => {
+    console.log('MessageEngine got message:', msg);
     addMessageToUi(msg);
     if (msg.direction === 'received') {
       saveMessage('current', msg);
