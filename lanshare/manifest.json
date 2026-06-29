@@ -1,0 +1,9 @@
+{
+  "id": "lanshare",
+  "name": "局域网快传",
+  "version": "1.0.0",
+  "description": "纯前端 WebRTC 点对点消息与文件传输，无需服务器",
+  "author": "ToolBox",
+  "icon": "icon.png",
+  "permissions": []
+}

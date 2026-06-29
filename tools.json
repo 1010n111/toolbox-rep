@@ -1,12 +1,20 @@
-{
-  "tools": [
-    {
-      "id": "cal",
-      "name": "单价比价器",
-      "version": "1.2.0",
-      "description": "支持 g/kg/ml/L/个 多单位自动换算，按重量/容量/数量分组比价，显示最低价和差价百分比，支持截图识别商品信息，数据本地保存",
-      "author": "ToolBox",
-      "path": "cal/cal.zip"
-    }
-  ]
+﻿{
+    "tools":  [
+                  {
+                      "id":  "cal",
+                      "name":  "单价比价器",
+                      "version":  "1.2.0",
+                      "description":  "支持 g/kg/ml/L/个 多单位自动换算，按重量/容量/数量分组比价，显示最低价和差价百分比，支持截图识别商品信息，数据本地保存",
+                      "author":  "ToolBox",
+                      "path":  "cal/cal.zip"
+                  },
+                  {
+                      "id":  "lanshare",
+                      "name":  "局域网快传",
+                      "version":  "1.0.0",
+                      "description":  "纯前端 WebRTC 点对点消息与文件传输，无需服务器",
+                      "author":  "ToolBox",
+                      "path":  "lanshare/lanshare.zip"
+                  }
+              ]
 }
