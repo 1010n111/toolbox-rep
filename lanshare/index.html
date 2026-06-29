@@ -50,6 +50,7 @@ button.danger { background: #fee2e2; color: #dc2626; }
   <div style="display:flex; gap:8px; margin-bottom:12px;">
     <button id="btnCreate" style="flex:1;">创建连接</button>
     <button id="btnJoin" class="secondary" style="flex:1;">加入连接</button>
+    <button id="btnReset" class="danger" style="padding:12px 12px;" title="重置连接">🔄</button>
   </div>
   <div id="connectionUi"></div>
 </div>
@@ -117,8 +118,25 @@ class ConnectionManager {
   }
 
   _createPeerConnection() {
-    const config = { iceServers: [] }; // 纯局域网，无需 STUN
+    // 纯局域网连接使用公开 STUN 服务器帮助 ICE 候选收集
+    const config = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
+    console.log('Creating PeerConnection with config:', config);
     this.pc = new RTCPeerConnection(config);
+
+    this.pc.onicecandidateerror = (e) => {
+      console.error('ICE candidate error:', e);
+    };
+    this.pc.onsignalingstatechange = () => {
+      console.log('Signaling state changed:', this.pc.signalingState);
+    };
+    this.pc.oniceconnectionstatechange = () => {
+      console.log('ICE connection state:', this.pc.iceConnectionState);
+    };
 
     this.pc.onicecandidate = (e) => {
       if (e.candidate) {
@@ -425,6 +443,8 @@ function setStatusText(text, color) {
   const el = document.getElementById('connStatus');
   el.textContent = text;
   if (color) el.style.color = color;
+  // 在控制台输出详细状态
+  console.log('Connection status:', text);
 }
 
 document.getElementById('btnCreate').onclick = async () => {
@@ -518,6 +538,18 @@ function setupConnectionHandlers() {
   };
 }
 setupConnectionHandlers();
+
+// 重置连接按钮
+document.getElementById('btnReset').onclick = () => {
+  if (confirm('确定要重置连接吗？')) {
+    connMgr.close();
+    connMgr = new ConnectionManager();
+    setupConnectionHandlers();
+    document.getElementById('connectionUi').innerHTML = '';
+    document.getElementById('messagesPanel').style.display = 'none';
+    setStatusText('未连接', null);
+  }
+};
 
 function setupMessageHandlers() {
   document.getElementById('messagesPanel').style.display = 'block';
