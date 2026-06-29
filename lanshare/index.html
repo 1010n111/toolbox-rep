@@ -47,10 +47,14 @@ button.danger { background: #fee2e2; color: #dc2626; }
     <h3 style="font-size:16px; font-weight:600; color:#1e293b;">连接管理</h3>
     <span id="connStatus" style="font-size:13px; color:#64748b; background:#f1f5f9; padding:4px 10px; border-radius:12px;">未连接</span>
   </div>
-  <div style="display:flex; gap:8px; margin-bottom:12px;">
+  <div style="display:flex; gap:8px; margin-bottom:8px;">
     <button id="btnCreate" style="flex:1;">创建连接</button>
     <button id="btnJoin" class="secondary" style="flex:1;">加入连接</button>
     <button id="btnReset" class="danger" style="padding:12px 12px;" title="重置连接">🔄</button>
+  </div>
+  <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; font-size:13px;">
+    <input type="checkbox" id="enableStun">
+    <label for="enableStun">启用 STUN（跨网/连不上时勾选）</label>
   </div>
   <div id="connectionUi"></div>
 </div>
@@ -117,25 +121,34 @@ class ConnectionManager {
     this.iceCandidates = [];
   }
 
-  _createPeerConnection() {
-    // 纯局域网连接使用公开 STUN 服务器帮助 ICE 候选收集
-    const config = {
+  _createPeerConnection(useStun = false) {
+    const config = useStun ? {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' }
       ]
-    };
-    console.log('Creating PeerConnection with config:', config);
+    } : { iceServers: [] };
+    console.log('Creating PeerConnection with', useStun ? 'STUN' : 'no STUN');
     this.pc = new RTCPeerConnection(config);
 
+    this.pc.onicecandidate = (e) => {
+      if (e.candidate) {
+        console.log('Got ICE candidate:', e.candidate.address, e.candidate.protocol, e.candidate.candidateType);
+        this.iceCandidates.push(e.candidate);
+      }
+    };
+
     this.pc.onicecandidateerror = (e) => {
-      console.error('ICE candidate error:', e);
+      console.warn('ICE candidate error (may be normal for IPv6):', e.url);
     };
     this.pc.onsignalingstatechange = () => {
       console.log('Signaling state changed:', this.pc.signalingState);
     };
     this.pc.oniceconnectionstatechange = () => {
       console.log('ICE connection state:', this.pc.iceConnectionState);
+      if (this.pc.iceConnectionState === 'failed') {
+        console.warn('ICE failed! Try: 1) 确保两台设备在同一WiFi 2) 检查是否开启了AP隔离 3) 开启STUN服务器重试');
+      }
     };
 
     this.pc.onicecandidate = (e) => {
@@ -181,8 +194,8 @@ class ConnectionManager {
   }
 
   // 创建 Offer 发送方
-  async createOffer() {
-    this._createPeerConnection();
+  async createOffer(useStun = false) {
+    this._createPeerConnection(useStun);
     this.dataChannel = this.pc.createDataChannel('data');
     this._setupDataChannel(this.dataChannel);
 
@@ -199,9 +212,9 @@ class ConnectionManager {
   }
 
   // 接收 Offer 并生成 Answer
-  async acceptOffer(offerStr) {
+  async acceptOffer(offerStr, useStun = false) {
     const offer = JSON.parse(offerStr);
-    this._createPeerConnection();
+    this._createPeerConnection(useStun);
     // 必须在 stable 状态设置 remote offer
     if (this.pc.signalingState !== 'stable') {
       console.warn('Invalid state for acceptOffer:', this.pc.signalingState);
@@ -454,9 +467,10 @@ document.getElementById('btnCreate').onclick = async () => {
     connMgr = new ConnectionManager();
     setupConnectionHandlers();
   }
-  setStatusText('生成连接码中...', '#f59e0b');
+  const useStun = document.getElementById('enableStun').checked;
+  setStatusText('生成连接码中...' + (useStun ? ' (STUN)' : ''), '#f59e0b');
   try {
-    const offer = await connMgr.createOffer();
+    const offer = await connMgr.createOffer(useStun);
     const connUi = document.getElementById('connectionUi');
     connUi.innerHTML = `
       <div style="margin:12px 0;">
@@ -507,9 +521,10 @@ document.getElementById('btnJoin').onclick = () => {
   document.getElementById('btnGenAnswer').onclick = async () => {
     const offer = document.getElementById('offerInput').value.trim();
     if (!offer) return;
-    setStatusText('生成应答中...', '#f59e0b');
+    const useStun = document.getElementById('enableStun').checked;
+    setStatusText('生成应答中...' + (useStun ? ' (STUN)' : ''), '#f59e0b');
     try {
-      const answer = await connMgr.acceptOffer(offer);
+      const answer = await connMgr.acceptOffer(offer, useStun);
       // 使用 insertAdjacentHTML 而不是 += ，避免重建 DOM 导致输入框内容丢失
       const answerBox = document.createElement('div');
       answerBox.style.margin = '12px 0';
